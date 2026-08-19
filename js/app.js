@@ -129,16 +129,31 @@
     return { n: n, m3: m3 };
   }
 
-  function mrDeRuma(r) {
+  // Método MR: la ruma se mide por su cara (largo × alto promedio).
+  // El volumen estéreo = MR × largo del trozo; el sólido = estéreo × factor de apilamiento.
+  function altoPromedio(r) {
     var suma = 0;
     for (var i = 0; i < r.altos.length; i++) suma += r.altos[i];
-    var prom = r.altos.length ? suma / r.altos.length : 0;
-    return r.largo * prom * r.trozo / 2.44;
+    return r.altos.length ? suma / r.altos.length : 0;
+  }
+
+  function mrDeRuma(r) {
+    return r.largo * altoPromedio(r);
+  }
+
+  function estereoDeRuma(r) {
+    return mrDeRuma(r) * r.trozo;
   }
 
   function totalMR(rumas) {
     var t = 0;
     for (var i = 0; i < rumas.length; i++) t += mrDeRuma(rumas[i]);
+    return t;
+  }
+
+  function totalEstereo(rumas) {
+    var t = 0;
+    for (var i = 0; i < rumas.length; i++) t += estereoDeRuma(rumas[i]);
     return t;
   }
 
@@ -148,7 +163,8 @@
       trozos: tc.n,
       m3: tc.m3,
       rumas: datos.rumas.length,
-      mr: totalMR(datos.rumas)
+      mr: totalMR(datos.rumas),
+      est: totalEstereo(datos.rumas)
     };
   }
 
@@ -314,35 +330,32 @@
 
   function pintarRumas() {
     var rumas = estado.actual.rumas;
-    var html = '<tr><th>N°</th><th>Largo</th><th>Alto prom.</th><th>Trozo</th><th>MR</th><th></th></tr>';
+    var html = '<tr><th>N°</th><th>Largo</th><th>Alto prom.</th><th>MR</th><th>M³ est.</th><th></th></tr>';
     for (var i = 0; i < rumas.length; i++) {
       var r = rumas[i];
-      var suma = 0;
-      for (var j = 0; j < r.altos.length; j++) suma += r.altos[j];
-      var prom = suma / r.altos.length;
       html += '<tr><td>' + (i + 1) + '</td>' +
         '<td>' + fmt(r.largo, 2) + '</td>' +
-        '<td>' + fmt(prom, 2) + '</td>' +
-        '<td>' + fmt(r.trozo, 2) + '</td>' +
+        '<td>' + fmt(altoPromedio(r), 2) + '</td>' +
         '<td>' + fmt(mrDeRuma(r), 2) + '</td>' +
+        '<td>' + fmt(estereoDeRuma(r), 2) + '</td>' +
         '<td><button type="button" class="btn-mini" data-indice="' + i + '">✕</button></td></tr>';
     }
     if (!rumas.length) {
       html += '<tr><td colspan="6" class="vacio">Aún no hay rumas</td></tr>';
     }
     $('tablaRumas').innerHTML = html;
-    var total = totalMR(rumas);
     $('totalMR').textContent = rumas.length
-      ? 'Total: ' + fmt(total, 2) + ' MR (' + rumas.length + (rumas.length === 1 ? ' ruma)' : ' rumas)')
+      ? 'Total: ' + fmt(totalMR(rumas), 2) + ' MR · ' + fmt(totalEstereo(rumas), 2) + ' m³ estéreo (' +
+        rumas.length + (rumas.length === 1 ? ' ruma)' : ' rumas)')
       : 'Sin rumas registradas';
     pintarConversionMR();
   }
 
   function pintarConversionMR() {
     var factor = numeroDesdeTexto(estado.actual.factorMR);
-    var total = totalMR(estado.actual.rumas);
-    $('mrConvertido').textContent = (factor > 0 && total > 0)
-      ? 'Equivale a ' + fmt(total * factor, 3) + ' m³ sólidos (factor ' + fmt(factor, 2) + ')'
+    var est = totalEstereo(estado.actual.rumas);
+    $('mrConvertido').textContent = (factor > 0 && est > 0)
+      ? 'Volumen sólido: ' + fmt(est * factor, 3) + ' m³ (factor de apilamiento ' + fmt(factor, 2) + ')'
       : '';
   }
 
@@ -381,11 +394,12 @@
       '<tr><td>Trozos cubicados (JAS)</td><td>' + r.trozos + '</td></tr>' +
       '<tr><td>Volumen JAS</td><td>' + fmt(r.m3, 3) + ' m³</td></tr>' +
       '<tr><td>Rumas</td><td>' + r.rumas + '</td></tr>' +
-      '<tr><td>Metro ruma</td><td>' + fmt(r.mr, 2) + ' MR</td></tr>';
+      '<tr><td>Metro ruma</td><td>' + fmt(r.mr, 2) + ' MR</td></tr>' +
+      '<tr><td>Volumen estéreo</td><td>' + fmt(r.est || 0, 2) + ' m³ est.</td></tr>';
     var factor = numeroDesdeTexto(estado.actual.factorMR);
-    if (factor > 0 && r.mr > 0) {
-      html += '<tr><td>MR convertido (factor ' + fmt(factor, 2) + ')</td><td>' +
-        fmt(r.mr * factor, 3) + ' m³</td></tr>';
+    if (factor > 0 && r.est > 0) {
+      html += '<tr><td>Volumen sólido (factor ' + fmt(factor, 2) + ')</td><td>' +
+        fmt(r.est * factor, 3) + ' m³</td></tr>';
     }
     $('tablaProduccion').innerHTML = html;
   }
@@ -447,11 +461,12 @@
       [{ v: 'Trozos cubicados (JAS)', s: 0 }, r.trozos],
       [{ v: 'Volumen JAS (m³)', s: 0 }, { v: r.m3, s: 2 }],
       [{ v: 'Rumas registradas', s: 0 }, r.rumas],
-      [{ v: 'Metro ruma (MR)', s: 0 }, { v: Math.round(r.mr * 100) / 100, s: 2 }]
+      [{ v: 'Metro ruma (MR)', s: 0 }, { v: r.mr, s: 2 }],
+      [{ v: 'Volumen estéreo (m³ est.)', s: 0 }, { v: r.est || 0, s: 2 }]
     ];
     var factor = numeroDesdeTexto(datos.factorMR);
-    if (factor > 0 && r.mr > 0) {
-      filasReporte.push([{ v: 'MR convertido a m³ (factor ' + factor + ')', s: 0 }, { v: r.mr * factor, s: 2 }]);
+    if (factor > 0 && r.est > 0) {
+      filasReporte.push([{ v: 'Volumen sólido (factor apilamiento ' + String(factor).replace('.', ',') + ')', s: 0 }, { v: r.est * factor, s: 2 }]);
     }
     filasReporte.push([]);
     filasReporte.push([{ v: 'NOVEDADES DEL DÍA', s: 1 }]);
@@ -507,25 +522,29 @@
     // --- Hoja MR ---
     var filasMR = [[
       { v: 'N° ruma', s: 1 }, { v: 'Largo (m)', s: 1 }, { v: 'Altos medidos (m)', s: 1 },
-      { v: 'Alto prom. (m)', s: 1 }, { v: 'Largo trozo (m)', s: 1 }, { v: 'MR', s: 1 }
+      { v: 'Alto prom. (m)', s: 1 }, { v: 'MR', s: 1 }, { v: 'Largo trozo (m)', s: 1 },
+      { v: 'M³ estéreo', s: 1 }
     ]];
     for (i = 0; i < datos.rumas.length; i++) {
       var ruma = datos.rumas[i];
-      var suma = 0;
-      for (j = 0; j < ruma.altos.length; j++) suma += ruma.altos[j];
       filasMR.push([
         i + 1,
         { v: ruma.largo, s: 2 },
         ruma.altos.map(function (a) { return String(a).replace('.', ','); }).join(' · '),
-        { v: suma / ruma.altos.length, s: 2 },
+        { v: altoPromedio(ruma), s: 2 },
+        { v: mrDeRuma(ruma), s: 2 },
         { v: ruma.trozo, s: 2 },
-        { v: mrDeRuma(ruma), s: 2 }
+        { v: estereoDeRuma(ruma), s: 2 }
       ]);
     }
-    filasMR.push([{ v: 'TOTAL', s: 1 }, '', '', '', '', { v: totalMR(datos.rumas), s: 3 }]);
+    filasMR.push([{ v: 'TOTAL', s: 1 }, '', '', '', { v: totalMR(datos.rumas), s: 3 }, '', { v: totalEstereo(datos.rumas), s: 3 }]);
+    if (factor > 0) {
+      filasMR.push([{ v: 'VOLUMEN SÓLIDO (factor ' + String(factor).replace('.', ',') + ')', s: 1 }, '', '', '', '', '', { v: totalEstereo(datos.rumas) * factor, s: 3 }]);
+    }
     filasMR.push([]);
-    filasMR.push(['Fórmula: MR = largo de la ruma × alto promedio × largo del trozo ÷ 2,44']);
-    hojas.push({ nombre: 'Metro ruma', anchos: [9, 11, 26, 13, 14, 10], filas: filasMR });
+    filasMR.push(['Método: la ruma se mide por su cara. MR = largo × alto promedio.']);
+    filasMR.push(['Volumen estéreo = MR × largo del trozo. Volumen sólido = estéreo × factor de apilamiento.']);
+    hojas.push({ nombre: 'Metro ruma', anchos: [9, 11, 24, 13, 10, 14, 11], filas: filasMR });
 
     return hojas;
   }
@@ -581,9 +600,9 @@
     lineas.push('• Trozos cubicados (JAS): ' + r.trozos);
     lineas.push('• Volumen JAS: ' + fmt(r.m3, 3) + ' m³');
     if (r.rumas) {
-      lineas.push('• Rumas: ' + r.rumas + ' — ' + fmt(r.mr, 2) + ' MR');
+      lineas.push('• Rumas: ' + r.rumas + ' — ' + fmt(r.mr, 2) + ' MR — ' + fmt(r.est || 0, 2) + ' m³ est.');
       var factor = numeroDesdeTexto(datos.factorMR);
-      if (factor > 0) lineas.push('• Equivalente: ' + fmt(r.mr * factor, 3) + ' m³ (factor ' + fmt(factor, 2) + ')');
+      if (factor > 0 && r.est > 0) lineas.push('• Volumen sólido: ' + fmt(r.est * factor, 3) + ' m³ (factor ' + fmt(factor, 2) + ')');
     }
     lineas.push('');
     lineas.push('📝 Novedades:');
@@ -668,29 +687,30 @@
     var filas = [[
       { v: 'Fecha', s: 1 }, { v: 'Faena / Predio', s: 1 }, { v: 'Máquina', s: 1 },
       { v: 'Operador', s: 1 }, { v: 'Trozos', s: 1 }, { v: 'M³ JAS', s: 1 },
-      { v: 'Rumas', s: 1 }, { v: 'MR', s: 1 }, { v: 'Novedades', s: 1 }
+      { v: 'Rumas', s: 1 }, { v: 'MR', s: 1 }, { v: 'M³ est.', s: 1 }, { v: 'Novedades', s: 1 }
     ]];
-    var totTrozos = 0, totM3 = 0, totMRr = 0;
+    var totTrozos = 0, totM3 = 0, totMRr = 0, totEst = 0;
     for (var i = estado.historial.length - 1; i >= 0; i--) {
       var it = estado.historial[i];
       totTrozos += it.tot.trozos;
       totM3 += it.tot.m3;
       totMRr += it.tot.mr;
+      totEst += it.tot.est || 0;
       filas.push([
         it.fecha, it.faena, it.maquina, it.operador,
         it.tot.trozos, { v: it.tot.m3, s: 2 },
-        it.tot.rumas, { v: it.tot.mr, s: 2 },
+        it.tot.rumas, { v: it.tot.mr, s: 2 }, { v: it.tot.est || 0, s: 2 },
         { v: it.novedades || '', s: 4 }
       ]);
     }
     filas.push([
       { v: 'TOTAL', s: 1 }, '', '', '',
       { v: totTrozos, s: 1 }, { v: totM3, s: 3 },
-      '', { v: totMRr, s: 3 }, ''
+      '', { v: totMRr, s: 3 }, { v: totEst, s: 3 }, ''
     ]);
     var blob = MiniXLSX.crear([{
       nombre: 'Resumen',
-      anchos: [12, 22, 22, 20, 9, 10, 8, 8, 60],
+      anchos: [12, 22, 22, 20, 9, 10, 8, 8, 9, 60],
       filas: filas
     }]);
     descargar(blob, 'historial_calibraciones.xlsx');
