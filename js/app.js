@@ -236,7 +236,7 @@
       html += '<div class="fila-diam' + (cant ? ' con-trozos' : '') + '" data-diam="' + diam + '">' +
         '<span class="diam">' + diam + '</span>' +
         '<button type="button" class="menos" aria-label="Quitar trozo de ' + diam + ' cm">−</button>' +
-        '<span class="cuenta">' + cant + '</span>' +
+        '<input class="cuenta" type="number" inputmode="numeric" min="0" step="1" value="' + cant + '" aria-label="Trozos de ' + diam + ' cm">' +
         '<button type="button" class="mas" aria-label="Sumar trozo de ' + diam + ' cm">+</button>' +
         '<span class="m3">' + (cant ? fmt(m3, 3) : '') + '</span>' +
         '</div>';
@@ -245,29 +245,54 @@
     pintarResumen();
   }
 
-  $('gridConteo').addEventListener('click', function (ev) {
-    var btn = ev.target.closest('button');
-    if (!btn) return;
-    var fila = btn.closest('.fila-diam');
+  // Fija la cantidad de una clase diamétrica y actualiza solo la fila tocada
+  // y los resúmenes. escribirCampo=false cuando el cambio viene del propio
+  // input, para no pisar lo que el usuario está tipeando.
+  function fijarCuenta(fila, cant, escribirCampo) {
     var diam = fila.getAttribute('data-diam');
     var L = LARGOS[largoActivo];
     var claveLargo = String(L.nom);
     if (!estado.actual.conteo[claveLargo]) estado.actual.conteo[claveLargo] = {};
     var porDiam = estado.actual.conteo[claveLargo];
-    var cant = porDiam[diam] || 0;
-    cant += btn.classList.contains('mas') ? 1 : -1;
-    if (cant < 0) cant = 0;
-    if (cant === 0) delete porDiam[diam];
+    if (!(cant > 0)) { cant = 0; delete porDiam[diam]; }
     else porDiam[diam] = cant;
     guardar();
 
-    // Actualiza solo la fila tocada y los resúmenes.
     var m3 = cant * volumenJAS(+diam, L.nom);
-    fila.querySelector('.cuenta').textContent = cant;
+    if (escribirCampo) fila.querySelector('.cuenta').value = cant;
     fila.querySelector('.m3').textContent = cant ? fmt(m3, 3) : '';
     fila.classList.toggle('con-trozos', cant > 0);
     pintarChips();
     pintarResumen();
+  }
+
+  function cuentaDe(fila) {
+    var L = LARGOS[largoActivo];
+    var porDiam = estado.actual.conteo[String(L.nom)] || {};
+    return porDiam[fila.getAttribute('data-diam')] || 0;
+  }
+
+  $('gridConteo').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('button');
+    if (!btn) return;
+    var fila = btn.closest('.fila-diam');
+    var cant = cuentaDe(fila) + (btn.classList.contains('mas') ? 1 : -1);
+    fijarCuenta(fila, cant, true);
+  });
+
+  // Tipear la cantidad directo en el campo (para no apretar + trescientas veces).
+  $('gridConteo').addEventListener('input', function (ev) {
+    if (!ev.target.classList.contains('cuenta')) return;
+    var n = parseInt(ev.target.value, 10);
+    if (!(n >= 0)) n = 0;
+    if (n > 99999) n = 99999;
+    fijarCuenta(ev.target.closest('.fila-diam'), n, false);
+  });
+
+  // Al salir del campo se normaliza lo que quedó escrito (vacío → 0).
+  $('gridConteo').addEventListener('change', function (ev) {
+    if (!ev.target.classList.contains('cuenta')) return;
+    ev.target.value = cuentaDe(ev.target.closest('.fila-diam'));
   });
 
   function pintarResumen() {

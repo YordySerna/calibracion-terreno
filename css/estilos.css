@@ -242,10 +242,23 @@ textarea{ resize: vertical; min-height: 7rem; }
   font-size: 1.02rem;
 }
 .fila-diam .cuenta{
+  width: 100%;
+  height: 2.7rem;
+  margin: 0;
+  padding: 0 .15rem;
   text-align: center;
   font-size: 1.15rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  border: 1.5px solid var(--linea);
+  border-radius: 8px;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.fila-diam .cuenta::-webkit-outer-spin-button,
+.fila-diam .cuenta::-webkit-inner-spin-button{
+  -webkit-appearance: none;
+  margin: 0;
 }
 .fila-diam .m3{
   text-align: right;
