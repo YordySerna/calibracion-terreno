@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calibración Forestal</title>
+<meta name="description" content="Cubicación JAS, metro ruma y reporte diario para faenas forestales. Funciona sin señal.">
+<meta name="theme-color" content="#1b5e20">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Calibración">
+<link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+
+<header class="cabecera">
+  <h1>Calibración Forestal</h1>
+  <span id="fechaCabecera"></span>
+</header>
+
+<main>
+
+  <!-- ================= CUBICAR (JAS) ================= -->
+  <section id="panel-cubicar" class="panel activa">
+
+    <details class="tarjeta calc-rapida">
+      <summary>Calculadora JAS rápida</summary>
+      <div class="fila-form">
+        <label>Diámetro punta (cm)
+          <input id="calcDiam" type="number" inputmode="numeric" min="1" step="1" placeholder="28">
+        </label>
+        <label>Largo nominal (m)
+          <input id="calcLargo" type="number" inputmode="decimal" min="0.1" step="0.01" placeholder="4">
+        </label>
+      </div>
+      <p class="resultado" id="calcRes">Ingresa diámetro y largo</p>
+      <p class="nota">Norma JAS: V = D²×L÷10.000 (largos bajo 6 m) ·
+      V = (D+(L′−4)÷2)²×L÷10.000 (largos de 6 m o más).</p>
+    </details>
+
+    <div class="tarjeta">
+      <h2>Conteo de trozos</h2>
+      <p class="nota">Elige el largo y marca cada trozo con el botón +. El volumen sale solo de la tabla JAS.</p>
+      <div class="chips" id="chipsLargo"></div>
+      <div class="encabezado-grid">
+        <span>Diám.</span><span></span><span>Trozos</span><span></span><span>M³</span>
+      </div>
+      <div id="gridConteo"></div>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Resumen del conteo</h2>
+      <table class="tabla" id="tablaResumen"></table>
+      <button class="btn peligro" id="btnVaciarConteo" type="button">Vaciar todo el conteo</button>
+    </div>
+
+  </section>
+
+  <!-- ================= METRO RUMA ================= -->
+  <section id="panel-mr" class="panel">
+
+    <div class="tarjeta">
+      <h2>Cubicación en metro ruma (MR)</h2>
+      <p class="nota">MR = largo de la ruma × alto promedio × largo del trozo ÷ 2,44.
+      Puedes anotar varios altos (uno por punto de medición) separados por espacio.</p>
+      <label>Largo de la ruma (m)
+        <input id="mrLargo" type="number" inputmode="decimal" min="0.1" step="0.01" placeholder="12,5">
+      </label>
+      <label>Altos medidos (m)
+        <input id="mrAltos" type="text" inputmode="decimal" placeholder="2,1 2,3 2,0">
+      </label>
+      <label>Largo del trozo (m)
+        <input id="mrTrozo" type="number" inputmode="decimal" min="0.1" step="0.01" value="2.44">
+      </label>
+      <button class="btn primario" id="btnAgregarRuma" type="button">Agregar ruma</button>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Rumas del día</h2>
+      <table class="tabla" id="tablaRumas"></table>
+      <p class="resultado" id="totalMR">Sin rumas registradas</p>
+      <label>Factor de conversión a m³ sólido por MR (opcional)
+        <input id="factorMR" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Ej: 1,55">
+      </label>
+      <p class="nota" id="mrConvertido"></p>
+    </div>
+
+  </section>
+
+  <!-- ================= REPORTE DIARIO ================= -->
+  <section id="panel-reporte" class="panel">
+
+    <div class="tarjeta">
+      <h2>Datos de la faena</h2>
+      <label>Fecha
+        <input id="repFecha" type="date">
+      </label>
+      <label>Faena / Predio
+        <input id="repFaena" type="text" placeholder="Ej: Fundo Santa Elena">
+      </label>
+      <label>Máquina
+        <input id="repMaquina" type="text" placeholder="Ej: Harvester John Deere 1270">
+      </label>
+      <label>Operador
+        <input id="repOperador" type="text" placeholder="Nombre del operador">
+      </label>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Producción del día</h2>
+      <table class="tabla" id="tablaProduccion"></table>
+    </div>
+
+    <div class="tarjeta">
+      <h2>Novedades del día</h2>
+      <p class="nota">Cuenta lo que pasó en el día: panas, detenciones, clima, traslados,
+      accidentes, visitas… Esto llega tal cual al reporte para los jefes.</p>
+      <textarea id="repNovedades" rows="6"
+        placeholder="Ej: La cosechadora quedó en pana del sistema hidráulico desde las 10:30, por eso la producción fue menor. Se retomó a las 15:00."></textarea>
+    </div>
+
+    <div class="tarjeta acciones">
+      <button class="btn primario" id="btnGuardarDia" type="button">💾 Guardar calibración del día</button>
+      <button class="btn" id="btnExcelDia" type="button">📊 Exportar Excel (.xlsx)</button>
+      <button class="btn" id="btnCompartirExcel" type="button" hidden>📤 Compartir Excel</button>
+      <button class="btn" id="btnCompartirTexto" type="button">💬 Compartir reporte (WhatsApp)</button>
+    </div>
+
+  </section>
+
+  <!-- ================= HISTORIAL ================= -->
+  <section id="panel-historial" class="panel">
+
+    <div class="tarjeta">
+      <h2>Calibraciones guardadas</h2>
+      <p class="nota">Cada día guardado queda acá, en el teléfono. Desde aquí puedes volver a
+      exportar el Excel de cualquier día.</p>
+      <button class="btn" id="btnExcelTodo" type="button">📊 Exportar resumen de todo (.xlsx)</button>
+    </div>
+
+    <div id="listaHistorial"></div>
+
+  </section>
+
+</main>
+
+<nav class="tabs">
+  <button data-panel="cubicar" class="activa" type="button"><span>🪵</span>Cubicar</button>
+  <button data-panel="mr" type="button"><span>📐</span>MR</button>
+  <button data-panel="reporte" type="button"><span>📝</span>Reporte</button>
+  <button data-panel="historial" type="button"><span>📂</span>Historial</button>
+</nav>
+
+<script src="js/xlsx.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

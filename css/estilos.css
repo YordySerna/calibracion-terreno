@@ -1,0 +1,357 @@
+/* Calibración Forestal — estilos
+   Pensado para uso en terreno: contraste alto, botones grandes. */
+
+:root{
+  --verde: #1b5e20;
+  --verde-oscuro: #10380f;
+  --verde-claro: #e4efe2;
+  --fondo: #f2efe7;
+  --tarjeta: #ffffff;
+  --tinta: #1e231c;
+  --gris: #5d655a;
+  --linea: #d8d4c6;
+  --rojo: #b3261e;
+  --ambar: #a05c00;
+}
+
+*{ box-sizing: border-box; }
+html{ -webkit-text-size-adjust: 100%; }
+
+body{
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--tinta);
+  background: var(--fondo);
+}
+
+[hidden]{ display: none !important; }
+
+/* ---------- Cabecera ---------- */
+.cabecera{
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .5rem;
+  padding: .7rem 1rem calc(.7rem);
+  padding-top: calc(.7rem + env(safe-area-inset-top));
+  background: var(--verde);
+  color: #fff;
+}
+.cabecera h1{
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: .02em;
+}
+.cabecera span{
+  font-size: .8rem;
+  opacity: .9;
+  white-space: nowrap;
+}
+
+/* ---------- Paneles / pestañas ---------- */
+main{
+  max-width: 640px;
+  margin: 0 auto;
+  padding: .8rem .8rem calc(5.5rem + env(safe-area-inset-bottom));
+}
+.panel{ display: none; }
+.panel.activa{ display: block; }
+
+.tabs{
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  background: var(--verde-oscuro);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tabs button{
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .1rem;
+  padding: .55rem .2rem .5rem;
+  border: 0;
+  background: none;
+  color: #ffffffb3;
+  font: inherit;
+  font-size: .78rem;
+  cursor: pointer;
+}
+.tabs button span{ font-size: 1.35rem; line-height: 1; }
+.tabs button.activa{
+  color: #fff;
+  background: var(--verde);
+  font-weight: 700;
+}
+
+/* ---------- Tarjetas ---------- */
+.tarjeta{
+  background: var(--tarjeta);
+  border: 1px solid var(--linea);
+  border-radius: 12px;
+  padding: .9rem;
+  margin-bottom: .9rem;
+}
+.tarjeta h2{
+  margin: 0 0 .5rem;
+  font-size: 1rem;
+  color: var(--verde);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.nota{
+  margin: .2rem 0 .6rem;
+  font-size: .85rem;
+  color: var(--gris);
+}
+.resultado{
+  margin: .4rem 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--verde-oscuro);
+}
+
+/* ---------- Formularios ---------- */
+label{
+  display: block;
+  margin-bottom: .7rem;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--gris);
+}
+input, textarea{
+  display: block;
+  width: 100%;
+  margin-top: .25rem;
+  padding: .6rem .7rem;
+  font: inherit;
+  color: var(--tinta);
+  background: #fff;
+  border: 1.5px solid var(--linea);
+  border-radius: 8px;
+}
+input:focus, textarea:focus{
+  outline: 2px solid var(--verde);
+  outline-offset: 1px;
+  border-color: var(--verde);
+}
+textarea{ resize: vertical; min-height: 7rem; }
+.fila-form{
+  display: flex;
+  gap: .7rem;
+}
+.fila-form label{ flex: 1; }
+
+/* ---------- Botones ---------- */
+.btn{
+  display: block;
+  width: 100%;
+  padding: .8rem 1rem;
+  margin-top: .6rem;
+  font: inherit;
+  font-weight: 700;
+  color: var(--verde-oscuro);
+  background: var(--verde-claro);
+  border: 1.5px solid var(--verde);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.btn.primario{
+  color: #fff;
+  background: var(--verde);
+}
+.btn.peligro{
+  color: var(--rojo);
+  background: #fbeae9;
+  border-color: var(--rojo);
+}
+.btn:active{ transform: translateY(1px); }
+.acciones .btn{ margin-top: .6rem; }
+
+/* ---------- Calculadora rápida ---------- */
+.calc-rapida summary{
+  font-weight: 700;
+  color: var(--verde);
+  cursor: pointer;
+  padding: .2rem 0;
+}
+.calc-rapida[open] summary{ margin-bottom: .6rem; }
+
+/* ---------- Chips de largo ---------- */
+.chips{
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  margin-bottom: .7rem;
+}
+.chips button{
+  padding: .5rem .8rem;
+  font: inherit;
+  font-weight: 700;
+  color: var(--verde-oscuro);
+  background: var(--verde-claro);
+  border: 1.5px solid var(--linea);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.chips button.activa{
+  color: #fff;
+  background: var(--verde);
+  border-color: var(--verde);
+}
+.chips button small{
+  display: block;
+  font-weight: 400;
+  font-size: .7rem;
+  opacity: .85;
+}
+
+/* ---------- Grid de conteo ---------- */
+.encabezado-grid, .fila-diam{
+  display: grid;
+  grid-template-columns: 3.4rem 2.9rem 1fr 3.4rem 4.6rem;
+  gap: .35rem;
+  align-items: center;
+}
+.encabezado-grid{
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--gris);
+  text-transform: uppercase;
+  padding: 0 .2rem .3rem;
+}
+.encabezado-grid span:nth-child(3){ text-align: center; }
+.encabezado-grid span:nth-child(5){ text-align: right; }
+
+.fila-diam{
+  padding: .22rem .2rem;
+  border-top: 1px solid var(--linea);
+}
+.fila-diam.con-trozos{ background: var(--verde-claro); }
+.fila-diam .diam{
+  font-weight: 700;
+  font-size: 1.02rem;
+}
+.fila-diam .cuenta{
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.fila-diam .m3{
+  text-align: right;
+  font-size: .85rem;
+  color: var(--gris);
+  font-variant-numeric: tabular-nums;
+}
+.fila-diam button{
+  height: 2.7rem;
+  font-size: 1.4rem;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1.5px solid var(--linea);
+  background: #fff;
+  color: var(--gris);
+}
+.fila-diam button.mas{
+  border-color: var(--verde);
+  background: var(--verde);
+  color: #fff;
+}
+
+/* ---------- Tablas ---------- */
+.tabla{
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.tabla th, .tabla td{
+  padding: .35rem .3rem;
+  text-align: right;
+  border-bottom: 1px solid var(--linea);
+  font-size: .92rem;
+}
+.tabla th{
+  font-size: .75rem;
+  text-transform: uppercase;
+  color: var(--gris);
+}
+.tabla th:first-child, .tabla td:first-child{ text-align: left; }
+.tabla tr.total td{
+  font-weight: 700;
+  color: var(--verde-oscuro);
+  border-top: 2px solid var(--verde);
+  border-bottom: 0;
+}
+.tabla .btn-mini{
+  padding: .3rem .6rem;
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--rojo);
+  background: none;
+  border: 1px solid var(--rojo);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* ---------- Historial ---------- */
+.item-historial{
+  background: var(--tarjeta);
+  border: 1px solid var(--linea);
+  border-radius: 12px;
+  padding: .9rem;
+  margin-bottom: .9rem;
+}
+.item-historial h3{
+  margin: 0 0 .2rem;
+  font-size: 1rem;
+  color: var(--verde-oscuro);
+}
+.item-historial .meta{
+  font-size: .82rem;
+  color: var(--gris);
+  margin: 0 0 .4rem;
+}
+.item-historial .cifras{
+  font-size: .95rem;
+  margin: 0 0 .4rem;
+  font-weight: 600;
+}
+.item-historial .novedades{
+  font-size: .88rem;
+  background: var(--fondo);
+  border-radius: 8px;
+  padding: .5rem .6rem;
+  margin: 0 0 .5rem;
+  white-space: pre-wrap;
+}
+.item-historial .botones{
+  display: flex;
+  gap: .5rem;
+}
+.item-historial .botones .btn{
+  margin-top: 0;
+  padding: .55rem .5rem;
+  font-size: .85rem;
+}
+
+.vacio{
+  text-align: center;
+  color: var(--gris);
+  padding: 1.5rem 0;
+}
+
+@media (prefers-reduced-motion: reduce){
+  *{ transition: none !important; }
+}
