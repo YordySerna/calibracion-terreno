@@ -78,9 +78,13 @@
       <label>Largo de la ruma (m)
         <input id="mrLargo" type="number" inputmode="decimal" min="0.1" step="0.01" placeholder="12,5">
       </label>
-      <label>Altos medidos (m)
-        <input id="mrAltos" type="text" inputmode="decimal" placeholder="2,1 2,3 2,0">
+      <label>Alto medido (m) — agrega uno por punto de medición con el botón ＋
+        <span class="fila-alto">
+          <input id="mrAlto" type="text" inputmode="decimal" placeholder="2,1">
+          <button type="button" class="btn-alto" id="btnAgregarAlto" aria-label="Agregar alto">＋</button>
+        </span>
       </label>
+      <p class="nota" id="altosAcumulados"></p>
       <label>Largo del trozo (m)
         <input id="mrTrozo" type="number" inputmode="decimal" min="0.1" step="0.01" value="2.44">
       </label>
@@ -112,9 +116,6 @@
       </label>
       <label>Máquina
         <input id="repMaquina" type="text" placeholder="Ej: Harvester John Deere 1270">
-      </label>
-      <label>Operador
-        <input id="repOperador" type="text" placeholder="Nombre del operador">
       </label>
     </div>
 

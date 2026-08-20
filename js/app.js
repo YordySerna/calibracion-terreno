@@ -38,7 +38,6 @@
         fecha: hoyISO(),
         faena: '',
         maquina: '',
-        operador: '',
         novedades: '',
         // Cada cancha lleva su propio conteo: { "3.2": { "18": 46, ... }, ... }
         canchas: [{ nombre: 'Cancha 1', conteo: {} }],
@@ -445,26 +444,58 @@
 
   /* ================= Metro ruma ================= */
 
+  // Altos de la ruma en curso: se van acumulando con el botón ＋.
+  var altosTemp = [];
+
+  function pintarAltos() {
+    if (!altosTemp.length) {
+      $('altosAcumulados').innerHTML = 'Sin altos agregados aún.';
+      return;
+    }
+    var suma = 0;
+    for (var i = 0; i < altosTemp.length; i++) suma += altosTemp[i];
+    $('altosAcumulados').innerHTML =
+      'Altos: <strong>' + altosTemp.map(function (a) { return fmt(a, 2); }).join(' · ') +
+      '</strong> — promedio ' + fmt(suma / altosTemp.length, 2) + ' m' +
+      '<button type="button" class="btn-quitar-alto" id="btnQuitarAlto">↩ quitar último</button>';
+  }
+
+  function agregarAlto() {
+    var a = numeroDesdeTexto($('mrAlto').value);
+    if (!(a > 0)) { alert('Escribe un alto válido, ej: 2,1'); return; }
+    altosTemp.push(a);
+    $('mrAlto').value = '';
+    $('mrAlto').focus();
+    pintarAltos();
+  }
+
+  $('btnAgregarAlto').addEventListener('click', agregarAlto);
+  $('mrAlto').addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter') { ev.preventDefault(); agregarAlto(); }
+  });
+  $('altosAcumulados').addEventListener('click', function (ev) {
+    if (ev.target.id !== 'btnQuitarAlto') return;
+    altosTemp.pop();
+    pintarAltos();
+  });
+
   $('btnAgregarRuma').addEventListener('click', function () {
     var largo = numeroDesdeTexto($('mrLargo').value);
     var trozo = numeroDesdeTexto($('mrTrozo').value);
-    var textoAltos = $('mrAltos').value.trim();
-    var altos = [];
-    if (textoAltos) {
-      var pedazos = textoAltos.split(/[\s;]+/);
-      for (var i = 0; i < pedazos.length; i++) {
-        var a = numeroDesdeTexto(pedazos[i]);
-        if (a > 0) altos.push(a);
-      }
-    }
+    var altos = altosTemp.slice();
+    // Si escribió un alto y no alcanzó a apretar ＋, se toma igual.
+    var pendiente = numeroDesdeTexto($('mrAlto').value);
+    if (pendiente > 0) altos.push(pendiente);
     if (!(largo > 0)) { alert('Falta el largo de la ruma.'); return; }
-    if (!altos.length) { alert('Falta al menos un alto medido.'); return; }
+    if (!altos.length) { alert('Falta al menos un alto: escríbelo y apreta ＋.'); return; }
     if (!(trozo > 0)) { alert('Falta el largo del trozo.'); return; }
 
     estado.actual.rumas.push({ largo: largo, altos: altos, trozo: trozo });
     guardar();
+    altosTemp = [];
     $('mrLargo').value = '';
-    $('mrAltos').value = '';
+    $('mrAlto').value = '';
+    pintarAltos();
     pintarRumas();
   });
 
@@ -517,7 +548,7 @@
 
   /* ================= Reporte diario ================= */
 
-  var camposReporte = { repFecha: 'fecha', repFaena: 'faena', repMaquina: 'maquina', repOperador: 'operador', repNovedades: 'novedades' };
+  var camposReporte = { repFecha: 'fecha', repFaena: 'faena', repMaquina: 'maquina', repNovedades: 'novedades' };
   Object.keys(camposReporte).forEach(function (id) {
     $(id).addEventListener('input', function () {
       estado.actual[camposReporte[id]] = this.value;
@@ -529,7 +560,6 @@
     $('repFecha').value = estado.actual.fecha;
     $('repFaena').value = estado.actual.faena;
     $('repMaquina').value = estado.actual.maquina;
-    $('repOperador').value = estado.actual.operador;
     $('repNovedades').value = estado.actual.novedades;
     pintarProduccion();
   }
@@ -614,7 +644,6 @@
       [{ v: 'Fecha', s: 1 }, datos.fecha || ''],
       [{ v: 'Faena / Predio', s: 1 }, datos.faena || ''],
       [{ v: 'Máquina', s: 1 }, datos.maquina || ''],
-      [{ v: 'Operador', s: 1 }, datos.operador || ''],
       [],
       [{ v: 'PRODUCCIÓN DEL DÍA', s: 1 }],
       [{ v: 'Trozos cubicados (JAS)', s: 0 }, r.trozos],
@@ -782,23 +811,38 @@
     ];
     if (datos.faena) lineas.push('Faena: ' + datos.faena);
     if (datos.maquina) lineas.push('Máquina: ' + datos.maquina);
-    if (datos.operador) lineas.push('Operador: ' + datos.operador);
-    lineas.push('');
-    lineas.push('🪵 Producción:');
-    lineas.push('• Trozos cubicados (JAS): ' + r.trozos);
-    lineas.push('• Volumen JAS: ' + fmt(r.m3, 3) + ' m³');
+
+    // Cada cancha con su desglose por producto (largo) y su total.
     var listaCanchas = canchasDe(datos);
-    if (listaCanchas.length > 1) {
-      for (var c = 0; c < listaCanchas.length; c++) {
-        var tc = totalesConteo(listaCanchas[c].conteo);
-        lineas.push('   · ' + (listaCanchas[c].nombre || ('Cancha ' + (c + 1))) + ': ' +
-          tc.n + ' trozos — ' + fmt(tc.m3, 3) + ' m³');
+    for (var c = 0; c < listaCanchas.length; c++) {
+      var cancha = listaCanchas[c];
+      var tc = totalesConteo(cancha.conteo);
+      if (!tc.n) continue;
+      var nombre = cancha.nombre || ('Cancha ' + (c + 1));
+      lineas.push('');
+      lineas.push('🪵 ' + nombre + ':');
+      for (var i = 0; i < LARGOS.length; i++) {
+        var t = totalesLargo(cancha.conteo, i);
+        if (!t.n) continue;
+        lineas.push('• ' + fmtLargo(LARGOS[i].nom) + ' m: ' + t.n + ' trozos — ' + fmt(t.m3, 3) + ' m³');
+      }
+      lineas.push('Total ' + nombre + ': ' + tc.n + ' trozos — ' + fmt(tc.m3, 3) + ' m³');
+    }
+
+    if (r.rumas) {
+      lineas.push('');
+      lineas.push('📐 Metro ruma: ' + r.rumas + (r.rumas === 1 ? ' ruma' : ' rumas') +
+        ' — ' + fmt(r.mr, 2) + ' MR (' + fmt(r.est || 0, 2) + ' m³ est.)');
+      var factor = numeroDesdeTexto(datos.factorMR);
+      if (factor > 0 && r.est > 0) {
+        lineas.push('• Volumen sólido: ' + fmt(r.est * factor, 3) + ' m³ (factor ' + fmt(factor, 2) + ')');
       }
     }
-    if (r.rumas) {
-      lineas.push('• Rumas: ' + r.rumas + ' — ' + fmt(r.mr, 2) + ' MR — ' + fmt(r.est || 0, 2) + ' m³ est.');
-      var factor = numeroDesdeTexto(datos.factorMR);
-      if (factor > 0 && r.est > 0) lineas.push('• Volumen sólido: ' + fmt(r.est * factor, 3) + ' m³ (factor ' + fmt(factor, 2) + ')');
+
+    lineas.push('');
+    lineas.push('✅ Total general canchas: ' + fmt(r.m3, 3) + ' m³');
+    if (r.mr > 0) {
+      lineas.push('✅ Total del día: ' + fmt(r.m3, 3) + ' m³ + ' + fmt(r.mr, 2) + ' MR');
     }
     lineas.push('');
     lineas.push('📝 Novedades:');
@@ -830,9 +874,8 @@
       html += '<div class="item-historial" data-id="' + it.id + '">' +
         '<h3>' + fechaLegible(it.fecha) + '</h3>' +
         '<p class="meta">' +
-        (it.faena ? it.faena + ' · ' : '') +
-        (it.maquina ? it.maquina + ' · ' : '') +
-        (it.operador || '') + '</p>' +
+        (it.faena ? it.faena + (it.maquina ? ' · ' : '') : '') +
+        (it.maquina || '') + '</p>' +
         '<p class="cifras">' + r.trozos + ' trozos · ' + fmt(r.m3, 3) + ' m³ JAS' +
         (r.rumas ? ' · ' + fmt(r.mr, 2) + ' MR' : '') + '</p>' +
         (it.novedades.trim() ? '<p class="novedades">' + escaparHTML(it.novedades) + '</p>' : '') +
@@ -882,7 +925,7 @@
     }
     var filas = [[
       { v: 'Fecha', s: 1 }, { v: 'Faena / Predio', s: 1 }, { v: 'Máquina', s: 1 },
-      { v: 'Operador', s: 1 }, { v: 'Trozos', s: 1 }, { v: 'M³ JAS', s: 1 },
+      { v: 'Trozos', s: 1 }, { v: 'M³ JAS', s: 1 },
       { v: 'Rumas', s: 1 }, { v: 'MR', s: 1 }, { v: 'M³ est.', s: 1 }, { v: 'Novedades', s: 1 }
     ]];
     var totTrozos = 0, totM3 = 0, totMRr = 0, totEst = 0;
@@ -893,20 +936,20 @@
       totMRr += it.tot.mr;
       totEst += it.tot.est || 0;
       filas.push([
-        it.fecha, it.faena, it.maquina, it.operador,
+        it.fecha, it.faena, it.maquina,
         it.tot.trozos, { v: it.tot.m3, s: 2 },
         it.tot.rumas, { v: it.tot.mr, s: 2 }, { v: it.tot.est || 0, s: 2 },
         { v: it.novedades || '', s: 4 }
       ]);
     }
     filas.push([
-      { v: 'TOTAL', s: 1 }, '', '', '',
+      { v: 'TOTAL', s: 1 }, '', '',
       { v: totTrozos, s: 1 }, { v: totM3, s: 3 },
       '', { v: totMRr, s: 3 }, { v: totEst, s: 3 }, ''
     ]);
     var blob = MiniXLSX.crear([{
       nombre: 'Resumen',
-      anchos: [12, 22, 22, 20, 9, 10, 8, 8, 9, 60],
+      anchos: [12, 22, 22, 9, 10, 8, 8, 9, 60],
       filas: filas
     }]);
     descargar(blob, 'historial_calibraciones.xlsx');
@@ -925,6 +968,7 @@
   pintarCanchas();
   pintarChips();
   pintarGrid();
+  pintarAltos();
   pintarRumas();
   pintarReporte();
   pintarHistorial();
