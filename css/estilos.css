@@ -177,6 +177,21 @@ textarea{ resize: vertical; min-height: 7rem; }
 .btn:active{ transform: translateY(1px); }
 .acciones .btn{ margin-top: .6rem; }
 
+.opcion-check{
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  margin: .8rem 0 .2rem;
+  font-size: .95rem;
+  color: var(--tinta);
+}
+.opcion-check input{
+  width: 1.4rem;
+  height: 1.4rem;
+  margin: 0;
+  accent-color: var(--verde);
+}
+
 /* ---------- Altos de ruma ---------- */
 .fila-alto{
   display: flex;

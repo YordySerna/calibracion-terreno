@@ -39,11 +39,10 @@
         faena: '',
         maquina: '',
         novedades: '',
-        // Cada cancha lleva su propio conteo: { "3.2": { "18": 46, ... }, ... }
-        canchas: [{ nombre: 'Cancha 1', conteo: {} }],
+        // Cada cancha lleva su conteo { "3.2": { "18": 46, ... } } y sus rumas.
+        canchas: [{ nombre: 'Cancha 1', conteo: {}, rumas: [] }],
         canchaActiva: 0,
-        rumas: [],         // [ { largo, altos:[...], trozo } ]
-        factorMR: ''
+        juntarTotal: false
       },
       historial: []
     };
@@ -64,6 +63,14 @@
       if (!(e.actual.canchaActiva >= 0) || e.actual.canchaActiva >= e.actual.canchas.length) {
         e.actual.canchaActiva = 0;
       }
+      // Migración: las rumas eran una lista global; ahora viven en cada cancha.
+      for (var i = 0; i < e.actual.canchas.length; i++) {
+        if (!e.actual.canchas[i].rumas) e.actual.canchas[i].rumas = [];
+      }
+      if (e.actual.rumas && e.actual.rumas.length) {
+        e.actual.canchas[0].rumas = e.actual.canchas[0].rumas.concat(e.actual.rumas);
+      }
+      delete e.actual.rumas;
       return e;
     } catch (err) {
       return null;
@@ -163,8 +170,8 @@
     return comb;
   }
 
-  // Método MR: la ruma se mide por su cara (largo × alto promedio).
-  // El volumen estéreo = MR × largo del trozo; el sólido = estéreo × factor de apilamiento.
+  // Método MR: la ruma se mide por su cara (largo × alto promedio). No se
+  // convierte a m³: el MR se informa tal cual.
   function altoPromedio(r) {
     var suma = 0;
     for (var i = 0; i < r.altos.length; i++) suma += r.altos[i];
@@ -175,30 +182,42 @@
     return r.largo * altoPromedio(r);
   }
 
-  function estereoDeRuma(r) {
-    return mrDeRuma(r) * r.trozo;
-  }
-
   function totalMR(rumas) {
     var t = 0;
     for (var i = 0; i < rumas.length; i++) t += mrDeRuma(rumas[i]);
     return t;
   }
 
-  function totalEstereo(rumas) {
-    var t = 0;
-    for (var i = 0; i < rumas.length; i++) t += estereoDeRuma(rumas[i]);
-    return t;
+  // Rumas agrupadas por cancha; soporta guardados antiguos con lista suelta.
+  function rumasPorCancha(datos) {
+    var lista = canchasDe(datos), i;
+    var conRumas = false;
+    for (i = 0; i < lista.length; i++) {
+      if (lista[i].rumas && lista[i].rumas.length) conRumas = true;
+    }
+    if (!conRumas && datos.rumas && datos.rumas.length) {
+      return [{ nombre: '', rumas: datos.rumas }];
+    }
+    var salida = [];
+    for (i = 0; i < lista.length; i++) {
+      salida.push({ nombre: lista[i].nombre, rumas: lista[i].rumas || [] });
+    }
+    return salida;
   }
 
   function resumenDe(datos) {
     var tc = totalesConteo(combinarConteos(datos));
+    var grupos = rumasPorCancha(datos);
+    var rumasN = 0, mrT = 0;
+    for (var i = 0; i < grupos.length; i++) {
+      rumasN += grupos[i].rumas.length;
+      mrT += totalMR(grupos[i].rumas);
+    }
     return {
       trozos: tc.n,
       m3: tc.m3,
-      rumas: datos.rumas.length,
-      mr: totalMR(datos.rumas),
-      est: totalEstereo(datos.rumas)
+      rumas: rumasN,
+      mr: mrT
     };
   }
 
@@ -242,24 +261,29 @@
     var html = '';
     for (var i = 0; i < canchas.length; i++) {
       var t = totalesConteo(canchas[i].conteo);
+      var nRumas = (canchas[i].rumas || []).length;
+      var detalle = [];
+      if (t.n) detalle.push(t.n + ' trozos');
+      if (nRumas) detalle.push(nRumas + (nRumas === 1 ? ' ruma' : ' rumas'));
       html += '<button type="button" data-indice="' + i + '"' +
         (i === estado.actual.canchaActiva ? ' class="activa"' : '') + '>' +
         escaparHTML(canchas[i].nombre) +
-        '<small>' + (t.n ? t.n + ' trozos' : 'vacía') + '</small>' +
+        '<small>' + (detalle.length ? detalle.join(' · ') : 'vacía') + '</small>' +
         '</button>';
     }
     html += '<button type="button" data-accion="nueva">＋ Cancha<small>agregar</small></button>';
     $('chipsCancha').innerHTML = html;
+    $('chipsCanchaMR').innerHTML = html;
   }
 
-  $('chipsCancha').addEventListener('click', function (ev) {
+  function manejarClickCancha(ev) {
     var btn = ev.target.closest('button');
     if (!btn) return;
     if (btn.getAttribute('data-accion') === 'nueva') {
       var nombre = prompt('Nombre de la cancha nueva:', 'Cancha ' + (estado.actual.canchas.length + 1));
       if (nombre === null) return;
       nombre = nombre.trim() || ('Cancha ' + (estado.actual.canchas.length + 1));
-      estado.actual.canchas.push({ nombre: nombre, conteo: {} });
+      estado.actual.canchas.push({ nombre: nombre, conteo: {}, rumas: [] });
       estado.actual.canchaActiva = estado.actual.canchas.length - 1;
     } else {
       var i = +btn.getAttribute('data-indice');
@@ -276,7 +300,11 @@
     pintarCanchas();
     pintarChips();
     pintarGrid();
-  });
+    pintarRumas();
+  }
+
+  $('chipsCancha').addEventListener('click', manejarClickCancha);
+  $('chipsCanchaMR').addEventListener('click', manejarClickCancha);
 
   $('btnEliminarCancha').addEventListener('click', function () {
     var canchas = estado.actual.canchas;
@@ -285,13 +313,14 @@
       return;
     }
     var actual = canchas[estado.actual.canchaActiva];
-    if (!confirm('¿Eliminar «' + actual.nombre + '» con todo su conteo? Esto no borra lo ya guardado en el historial.')) return;
+    if (!confirm('¿Eliminar «' + actual.nombre + '» con su conteo y sus rumas? Esto no borra lo ya guardado en el historial.')) return;
     canchas.splice(estado.actual.canchaActiva, 1);
     estado.actual.canchaActiva = 0;
     guardar();
     pintarCanchas();
     pintarChips();
     pintarGrid();
+    pintarRumas();
   });
 
   function pintarChips() {
@@ -301,8 +330,8 @@
       var t = totalesLargo(conteoActivo(), i);
       html += '<button type="button" data-indice="' + i + '"' +
         (i === largoActivo ? ' class="activa"' : '') + '>' +
-        fmtLargo(L.nom) + ' m' +
-        '<small>' + (t.n ? t.n + ' trozos' : 'real ' + fmtLargo(L.real)) + '</small>' +
+        fmtLargo(L.real) + ' m' +
+        '<small>' + (t.n ? t.n + ' trozos' : 'cubica ' + fmtLargo(L.nom)) + '</small>' +
         '</button>';
     }
     $('chipsLargo').innerHTML = html;
@@ -420,7 +449,7 @@
         var t = totalesLargo(canchas[c].conteo, i);
         if (!t.n) continue;
         hayAlgo = true;
-        html += '<tr><td>' + (varias ? '· ' : '') + fmtLargo(LARGOS[i].nom) + ' m</td>' +
+        html += '<tr><td>' + (varias ? '· ' : '') + fmtLargo(LARGOS[i].real) + ' m</td>' +
           '<td>' + t.n + '</td><td>' + fmt(t.m3, 3) + '</td></tr>';
       }
     }
@@ -481,68 +510,65 @@
 
   $('btnAgregarRuma').addEventListener('click', function () {
     var largo = numeroDesdeTexto($('mrLargo').value);
-    var trozo = numeroDesdeTexto($('mrTrozo').value);
     var altos = altosTemp.slice();
     // Si escribió un alto y no alcanzó a apretar ＋, se toma igual.
     var pendiente = numeroDesdeTexto($('mrAlto').value);
     if (pendiente > 0) altos.push(pendiente);
     if (!(largo > 0)) { alert('Falta el largo de la ruma.'); return; }
     if (!altos.length) { alert('Falta al menos un alto: escríbelo y apreta ＋.'); return; }
-    if (!(trozo > 0)) { alert('Falta el largo del trozo.'); return; }
 
-    estado.actual.rumas.push({ largo: largo, altos: altos, trozo: trozo });
+    var canchaRuma = estado.actual.canchas[estado.actual.canchaActiva];
+    if (!canchaRuma.rumas) canchaRuma.rumas = [];
+    canchaRuma.rumas.push({ largo: largo, altos: altos });
     guardar();
     altosTemp = [];
     $('mrLargo').value = '';
     $('mrAlto').value = '';
     pintarAltos();
+    pintarCanchas();
     pintarRumas();
   });
 
-  $('factorMR').addEventListener('input', function () {
-    estado.actual.factorMR = this.value;
-    guardar();
-    pintarConversionMR();
-  });
-
   function pintarRumas() {
-    var rumas = estado.actual.rumas;
-    var html = '<tr><th>N°</th><th>Largo</th><th>Alto prom.</th><th>MR</th><th>M³ est.</th><th></th></tr>';
-    for (var i = 0; i < rumas.length; i++) {
-      var r = rumas[i];
-      html += '<tr><td>' + (i + 1) + '</td>' +
-        '<td>' + fmt(r.largo, 2) + '</td>' +
-        '<td>' + fmt(altoPromedio(r), 2) + '</td>' +
-        '<td>' + fmt(mrDeRuma(r), 2) + '</td>' +
-        '<td>' + fmt(estereoDeRuma(r), 2) + '</td>' +
-        '<td><button type="button" class="btn-mini" data-indice="' + i + '">✕</button></td></tr>';
+    var canchas = estado.actual.canchas;
+    var varias = canchas.length > 1;
+    var html = '<tr><th>N°</th><th>Largo</th><th>Alto prom.</th><th>MR</th><th></th></tr>';
+    var totalRumas = 0, totalMr = 0;
+    for (var c = 0; c < canchas.length; c++) {
+      var rumas = canchas[c].rumas || [];
+      totalRumas += rumas.length;
+      totalMr += totalMR(rumas);
+      if (varias && rumas.length) {
+        html += '<tr class="cancha"><td colspan="3">' + escaparHTML(canchas[c].nombre) + '</td>' +
+          '<td>' + fmt(totalMR(rumas), 2) + '</td><td></td></tr>';
+      }
+      for (var i = 0; i < rumas.length; i++) {
+        var r = rumas[i];
+        html += '<tr><td>' + (i + 1) + '</td>' +
+          '<td>' + fmt(r.largo, 2) + '</td>' +
+          '<td>' + fmt(altoPromedio(r), 2) + '</td>' +
+          '<td>' + fmt(mrDeRuma(r), 2) + '</td>' +
+          '<td><button type="button" class="btn-mini" data-cancha="' + c + '" data-indice="' + i + '">✕</button></td></tr>';
+      }
     }
-    if (!rumas.length) {
-      html += '<tr><td colspan="6" class="vacio">Aún no hay rumas</td></tr>';
+    if (!totalRumas) {
+      html += '<tr><td colspan="5" class="vacio">Aún no hay rumas</td></tr>';
     }
     $('tablaRumas').innerHTML = html;
-    $('totalMR').textContent = rumas.length
-      ? 'Total: ' + fmt(totalMR(rumas), 2) + ' MR · ' + fmt(totalEstereo(rumas), 2) + ' m³ estéreo (' +
-        rumas.length + (rumas.length === 1 ? ' ruma)' : ' rumas)')
+    $('totalMR').textContent = totalRumas
+      ? 'Total: ' + fmt(totalMr, 2) + ' MR (' + totalRumas + (totalRumas === 1 ? ' ruma)' : ' rumas)')
       : 'Sin rumas registradas';
-    pintarConversionMR();
-  }
-
-  function pintarConversionMR() {
-    var factor = numeroDesdeTexto(estado.actual.factorMR);
-    var est = totalEstereo(estado.actual.rumas);
-    $('mrConvertido').textContent = (factor > 0 && est > 0)
-      ? 'Volumen sólido: ' + fmt(est * factor, 3) + ' m³ (factor de apilamiento ' + fmt(factor, 2) + ')'
-      : '';
   }
 
   $('tablaRumas').addEventListener('click', function (ev) {
     var btn = ev.target.closest('.btn-mini');
     if (!btn) return;
+    var c = +btn.getAttribute('data-cancha');
     var i = +btn.getAttribute('data-indice');
-    if (!confirm('¿Eliminar la ruma N° ' + (i + 1) + '?')) return;
-    estado.actual.rumas.splice(i, 1);
+    if (!confirm('¿Eliminar la ruma N° ' + (i + 1) + ' de «' + estado.actual.canchas[c].nombre + '»?')) return;
+    estado.actual.canchas[c].rumas.splice(i, 1);
     guardar();
+    pintarCanchas();
     pintarRumas();
   });
 
@@ -561,33 +587,46 @@
     $('repFaena').value = estado.actual.faena;
     $('repMaquina').value = estado.actual.maquina;
     $('repNovedades').value = estado.actual.novedades;
+    $('chkJuntarTotal').checked = !!estado.actual.juntarTotal;
     pintarProduccion();
   }
 
   function pintarProduccion() {
     var r = resumenDe(estado.actual);
     var canchas = estado.actual.canchas;
+    var varias = canchas.length > 1;
     var html =
       '<tr><td>Trozos cubicados (JAS)</td><td>' + r.trozos + '</td></tr>' +
       '<tr><td>Volumen JAS</td><td>' + fmt(r.m3, 3) + ' m³</td></tr>';
-    if (canchas.length > 1) {
+    if (varias) {
       for (var c = 0; c < canchas.length; c++) {
         var tc = totalesConteo(canchas[c].conteo);
         html += '<tr><td>&nbsp;&nbsp;· ' + escaparHTML(canchas[c].nombre) + ' (' + tc.n + ' trozos)</td>' +
           '<td>' + fmt(tc.m3, 3) + ' m³</td></tr>';
       }
     }
-    html +=
-      '<tr><td>Rumas</td><td>' + r.rumas + '</td></tr>' +
-      '<tr><td>Metro ruma</td><td>' + fmt(r.mr, 2) + ' MR</td></tr>' +
-      '<tr><td>Volumen estéreo</td><td>' + fmt(r.est || 0, 2) + ' m³ est.</td></tr>';
-    var factor = numeroDesdeTexto(estado.actual.factorMR);
-    if (factor > 0 && r.est > 0) {
-      html += '<tr><td>Volumen sólido (factor ' + fmt(factor, 2) + ')</td><td>' +
-        fmt(r.est * factor, 3) + ' m³</td></tr>';
+    html += '<tr><td>Metro ruma</td><td>' + fmt(r.mr, 2) + ' MR (' + r.rumas +
+      (r.rumas === 1 ? ' ruma' : ' rumas') + ')</td></tr>';
+    if (varias && r.rumas) {
+      for (var g = 0; g < canchas.length; g++) {
+        var rumasC = canchas[g].rumas || [];
+        if (!rumasC.length) continue;
+        html += '<tr><td>&nbsp;&nbsp;· ' + escaparHTML(canchas[g].nombre) + ' (' + rumasC.length +
+          (rumasC.length === 1 ? ' ruma' : ' rumas') + ')</td>' +
+          '<td>' + fmt(totalMR(rumasC), 2) + ' MR</td></tr>';
+      }
+    }
+    if (estado.actual.juntarTotal && r.mr > 0) {
+      html += '<tr class="total"><td>Total general (m³ + MR)</td><td>' + fmt(r.m3 + r.mr, 2) + '</td></tr>';
     }
     $('tablaProduccion').innerHTML = html;
   }
+
+  $('chkJuntarTotal').addEventListener('change', function () {
+    estado.actual.juntarTotal = this.checked;
+    guardar();
+    pintarProduccion();
+  });
 
   $('btnGuardarDia').addEventListener('click', function () {
     var r = resumenDe(estado.actual);
@@ -603,9 +642,8 @@
 
     var limpiar = confirm('Calibración guardada en el historial ✔\n\n¿Quieres limpiar las canchas, las rumas y las novedades para empezar una nueva?');
     if (limpiar) {
-      estado.actual.canchas = [{ nombre: 'Cancha 1', conteo: {} }];
+      estado.actual.canchas = [{ nombre: 'Cancha 1', conteo: {}, rumas: [] }];
       estado.actual.canchaActiva = 0;
-      estado.actual.rumas = [];
       estado.actual.novedades = '';
       estado.actual.fecha = hoyISO();
       pintarCanchas();
@@ -658,14 +696,20 @@
         ]);
       }
     }
-    filasReporte.push(
-      [{ v: 'Rumas registradas', s: 0 }, r.rumas],
-      [{ v: 'Metro ruma (MR)', s: 0 }, { v: r.mr, s: 2 }],
-      [{ v: 'Volumen estéreo (m³ est.)', s: 0 }, { v: r.est || 0, s: 2 }]
-    );
-    var factor = numeroDesdeTexto(datos.factorMR);
-    if (factor > 0 && r.est > 0) {
-      filasReporte.push([{ v: 'Volumen sólido (factor apilamiento ' + String(factor).replace('.', ',') + ')', s: 0 }, { v: r.est * factor, s: 2 }]);
+    filasReporte.push([{ v: 'Metro ruma (MR)', s: 0 }, { v: r.mr, s: 2 }]);
+    var gruposMR = rumasPorCancha(datos);
+    if (varias && r.rumas) {
+      for (i = 0; i < gruposMR.length; i++) {
+        if (!gruposMR[i].rumas.length) continue;
+        filasReporte.push([
+          { v: '   · ' + (gruposMR[i].nombre || 'Sin cancha') + ' — ' + gruposMR[i].rumas.length +
+            (gruposMR[i].rumas.length === 1 ? ' ruma' : ' rumas'), s: 0 },
+          { v: totalMR(gruposMR[i].rumas), s: 2 }
+        ]);
+      }
+    }
+    if (datos.juntarTotal && r.mr > 0) {
+      filasReporte.push([{ v: 'TOTAL GENERAL (m³ + MR)', s: 1 }, { v: r.m3 + r.mr, s: 3 }]);
     }
     filasReporte.push([]);
     filasReporte.push([{ v: 'NOVEDADES DEL DÍA', s: 1 }]);
@@ -677,7 +721,7 @@
     function filaEncabezadoJAS() {
       var fila = [{ v: 'DIÁM (cm)', s: 1 }];
       for (var k = 0; k < LARGOS.length; k++) {
-        fila.push({ v: 'N° ' + LARGOS[k].nom.toFixed(2).replace('.', ',') + ' m', s: 1 });
+        fila.push({ v: 'N° ' + LARGOS[k].real.toFixed(2).replace('.', ',') + ' m', s: 1 });
         fila.push({ v: 'M³', s: 1 });
       }
       fila.push({ v: 'TOTAL N°', s: 1 });
@@ -729,39 +773,41 @@
     }
     if (varias) {
       filasJAS.push(filaTotalJAS(combinarConteos(datos), 'TOTAL GENERAL'));
+      filasJAS.push([]);
     }
+    filasJAS.push(['Los largos se informan con sobredimensión; el volumen usa el largo nominal de la tabla JAS (ej: 3,30 cubica como 3,20).']);
 
     var anchosJAS = [12];
     for (i = 0; i < LARGOS.length; i++) { anchosJAS.push(10); anchosJAS.push(9); }
     anchosJAS.push(10); anchosJAS.push(10);
     hojas.push({ nombre: 'Cubicación JAS', anchos: anchosJAS, filas: filasJAS });
 
-    // --- Hoja MR ---
+    // --- Hoja MR: rumas agrupadas por cancha ---
     var filasMR = [[
-      { v: 'N° ruma', s: 1 }, { v: 'Largo (m)', s: 1 }, { v: 'Altos medidos (m)', s: 1 },
-      { v: 'Alto prom. (m)', s: 1 }, { v: 'MR', s: 1 }, { v: 'Largo trozo (m)', s: 1 },
-      { v: 'M³ estéreo', s: 1 }
+      { v: 'N° ruma', s: 1 }, { v: 'Cancha', s: 1 }, { v: 'Largo (m)', s: 1 },
+      { v: 'Altos medidos (m)', s: 1 }, { v: 'Alto prom. (m)', s: 1 }, { v: 'MR', s: 1 }
     ]];
-    for (i = 0; i < datos.rumas.length; i++) {
-      var ruma = datos.rumas[i];
-      filasMR.push([
-        i + 1,
-        { v: ruma.largo, s: 2 },
-        ruma.altos.map(function (a) { return String(a).replace('.', ','); }).join(' · '),
-        { v: altoPromedio(ruma), s: 2 },
-        { v: mrDeRuma(ruma), s: 2 },
-        { v: ruma.trozo, s: 2 },
-        { v: estereoDeRuma(ruma), s: 2 }
-      ]);
+    for (i = 0; i < gruposMR.length; i++) {
+      var grupo = gruposMR[i];
+      for (j = 0; j < grupo.rumas.length; j++) {
+        var ruma = grupo.rumas[j];
+        filasMR.push([
+          j + 1,
+          grupo.nombre || '',
+          { v: ruma.largo, s: 2 },
+          ruma.altos.map(function (a) { return String(a).replace('.', ','); }).join(' · '),
+          { v: altoPromedio(ruma), s: 2 },
+          { v: mrDeRuma(ruma), s: 2 }
+        ]);
+      }
+      if (varias && grupo.rumas.length) {
+        filasMR.push([{ v: 'Subtotal', s: 1 }, { v: grupo.nombre || '', s: 1 }, '', '', '', { v: totalMR(grupo.rumas), s: 3 }]);
+      }
     }
-    filasMR.push([{ v: 'TOTAL', s: 1 }, '', '', '', { v: totalMR(datos.rumas), s: 3 }, '', { v: totalEstereo(datos.rumas), s: 3 }]);
-    if (factor > 0) {
-      filasMR.push([{ v: 'VOLUMEN SÓLIDO (factor ' + String(factor).replace('.', ',') + ')', s: 1 }, '', '', '', '', '', { v: totalEstereo(datos.rumas) * factor, s: 3 }]);
-    }
+    filasMR.push([{ v: 'TOTAL', s: 1 }, '', '', '', '', { v: r.mr, s: 3 }]);
     filasMR.push([]);
     filasMR.push(['Método: la ruma se mide por su cara. MR = largo × alto promedio.']);
-    filasMR.push(['Volumen estéreo = MR × largo del trozo. Volumen sólido = estéreo × factor de apilamiento.']);
-    hojas.push({ nombre: 'Metro ruma', anchos: [9, 11, 24, 13, 10, 14, 11], filas: filasMR });
+    hojas.push({ nombre: 'Metro ruma', anchos: [9, 18, 11, 24, 13, 10], filas: filasMR });
 
     return hojas;
   }
@@ -824,25 +870,41 @@
       for (var i = 0; i < LARGOS.length; i++) {
         var t = totalesLargo(cancha.conteo, i);
         if (!t.n) continue;
-        lineas.push('• ' + fmtLargo(LARGOS[i].nom) + ' m: ' + t.n + ' trozos — ' + fmt(t.m3, 3) + ' m³');
+        lineas.push('• ' + fmtLargo(LARGOS[i].real) + ' m: ' + t.n + ' trozos — ' + fmt(t.m3, 3) + ' m³');
       }
       lineas.push('Total ' + nombre + ': ' + tc.n + ' trozos — ' + fmt(tc.m3, 3) + ' m³');
     }
 
+    // Metro ruma separado por cancha.
     if (r.rumas) {
+      var grupos = rumasPorCancha(datos);
+      var conRumas = [];
+      for (var g = 0; g < grupos.length; g++) {
+        if (grupos[g].rumas.length) conRumas.push(grupos[g]);
+      }
       lineas.push('');
-      lineas.push('📐 Metro ruma: ' + r.rumas + (r.rumas === 1 ? ' ruma' : ' rumas') +
-        ' — ' + fmt(r.mr, 2) + ' MR (' + fmt(r.est || 0, 2) + ' m³ est.)');
-      var factor = numeroDesdeTexto(datos.factorMR);
-      if (factor > 0 && r.est > 0) {
-        lineas.push('• Volumen sólido: ' + fmt(r.est * factor, 3) + ' m³ (factor ' + fmt(factor, 2) + ')');
+      if (conRumas.length > 1) {
+        lineas.push('📐 Metro ruma:');
+        for (g = 0; g < conRumas.length; g++) {
+          lineas.push('• ' + (conRumas[g].nombre || 'Sin cancha') + ': ' +
+            fmt(totalMR(conRumas[g].rumas), 2) + ' MR (' + conRumas[g].rumas.length +
+            (conRumas[g].rumas.length === 1 ? ' ruma)' : ' rumas)'));
+        }
+        lineas.push('Total MR: ' + fmt(r.mr, 2) + ' MR');
+      } else {
+        lineas.push('📐 Metro ruma: ' + fmt(r.mr, 2) + ' MR (' + r.rumas +
+          (r.rumas === 1 ? ' ruma)' : ' rumas)'));
       }
     }
 
     lineas.push('');
-    lineas.push('✅ Total general canchas: ' + fmt(r.m3, 3) + ' m³');
-    if (r.mr > 0) {
-      lineas.push('✅ Total del día: ' + fmt(r.m3, 3) + ' m³ + ' + fmt(r.mr, 2) + ' MR');
+    if (datos.juntarTotal && r.mr > 0) {
+      lineas.push('✅ Total general: ' + fmt(r.m3 + r.mr, 2));
+    } else {
+      lineas.push('✅ Total general canchas: ' + fmt(r.m3, 3) + ' m³');
+      if (r.mr > 0) {
+        lineas.push('✅ Total del día: ' + fmt(r.m3, 3) + ' m³ + ' + fmt(r.mr, 2) + ' MR');
+      }
     }
     lineas.push('');
     lineas.push('📝 Novedades:');
@@ -926,30 +988,29 @@
     var filas = [[
       { v: 'Fecha', s: 1 }, { v: 'Faena / Predio', s: 1 }, { v: 'Máquina', s: 1 },
       { v: 'Trozos', s: 1 }, { v: 'M³ JAS', s: 1 },
-      { v: 'Rumas', s: 1 }, { v: 'MR', s: 1 }, { v: 'M³ est.', s: 1 }, { v: 'Novedades', s: 1 }
+      { v: 'Rumas', s: 1 }, { v: 'MR', s: 1 }, { v: 'Novedades', s: 1 }
     ]];
-    var totTrozos = 0, totM3 = 0, totMRr = 0, totEst = 0;
+    var totTrozos = 0, totM3 = 0, totMRr = 0;
     for (var i = estado.historial.length - 1; i >= 0; i--) {
       var it = estado.historial[i];
       totTrozos += it.tot.trozos;
       totM3 += it.tot.m3;
       totMRr += it.tot.mr;
-      totEst += it.tot.est || 0;
       filas.push([
         it.fecha, it.faena, it.maquina,
         it.tot.trozos, { v: it.tot.m3, s: 2 },
-        it.tot.rumas, { v: it.tot.mr, s: 2 }, { v: it.tot.est || 0, s: 2 },
+        it.tot.rumas, { v: it.tot.mr, s: 2 },
         { v: it.novedades || '', s: 4 }
       ]);
     }
     filas.push([
       { v: 'TOTAL', s: 1 }, '', '',
       { v: totTrozos, s: 1 }, { v: totM3, s: 3 },
-      '', { v: totMRr, s: 3 }, { v: totEst, s: 3 }, ''
+      '', { v: totMRr, s: 3 }, ''
     ]);
     var blob = MiniXLSX.crear([{
       nombre: 'Resumen',
-      anchos: [12, 22, 22, 9, 10, 8, 8, 9, 60],
+      anchos: [12, 22, 22, 9, 10, 8, 8, 60],
       filas: filas
     }]);
     descargar(blob, 'historial_calibraciones.xlsx');
@@ -962,8 +1023,6 @@
   });
 
   if (!estado.actual.fecha) estado.actual.fecha = hoyISO();
-  $('mrTrozo').value = '2.44';
-  $('factorMR').value = estado.actual.factorMR || '';
 
   pintarCanchas();
   pintarChips();
