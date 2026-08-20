@@ -186,6 +186,21 @@ textarea{ resize: vertical; min-height: 7rem; }
 }
 .calc-rapida[open] summary{ margin-bottom: .6rem; }
 
+.etiqueta-chips{
+  margin: .5rem 0 .3rem;
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--gris);
+}
+
+.tabla tr.cancha td{
+  font-weight: 700;
+  color: var(--verde-oscuro);
+  background: var(--verde-claro);
+}
+
 /* ---------- Chips de largo ---------- */
 .chips{
   display: flex;

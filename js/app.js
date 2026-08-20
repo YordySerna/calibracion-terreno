@@ -40,7 +40,9 @@
         maquina: '',
         operador: '',
         novedades: '',
-        conteo: {},        // { "3.2": { "18": 46, ... }, ... }
+        // Cada cancha lleva su propio conteo: { "3.2": { "18": 46, ... }, ... }
+        canchas: [{ nombre: 'Cancha 1', conteo: {} }],
+        canchaActiva: 0,
         rumas: [],         // [ { largo, altos:[...], trozo } ]
         factorMR: ''
       },
@@ -54,6 +56,15 @@
       if (!crudo) return null;
       var e = JSON.parse(crudo);
       if (!e || !e.actual) return null;
+      // Migración: versiones anteriores tenían un solo conteo, sin canchas.
+      if (!e.actual.canchas) {
+        e.actual.canchas = [{ nombre: 'Cancha 1', conteo: e.actual.conteo || {} }];
+        delete e.actual.conteo;
+        e.actual.canchaActiva = 0;
+      }
+      if (!(e.actual.canchaActiva >= 0) || e.actual.canchaActiva >= e.actual.canchas.length) {
+        e.actual.canchaActiva = 0;
+      }
       return e;
     } catch (err) {
       return null;
@@ -129,6 +140,30 @@
     return { n: n, m3: m3 };
   }
 
+  // Lista de canchas de un registro; los guardados antiguos tenían un solo conteo.
+  function canchasDe(datos) {
+    if (datos.canchas) return datos.canchas;
+    return [{ nombre: '', conteo: datos.conteo || {} }];
+  }
+
+  function conteoActivo() {
+    return estado.actual.canchas[estado.actual.canchaActiva].conteo;
+  }
+
+  // Suma los conteos de todas las canchas en uno solo (para totales generales).
+  function combinarConteos(datos) {
+    var lista = canchasDe(datos), comb = {}, c, lg, d;
+    for (c = 0; c < lista.length; c++) {
+      for (lg in lista[c].conteo) {
+        if (!comb[lg]) comb[lg] = {};
+        for (d in lista[c].conteo[lg]) {
+          comb[lg][d] = (comb[lg][d] || 0) + lista[c].conteo[lg][d];
+        }
+      }
+    }
+    return comb;
+  }
+
   // Método MR: la ruma se mide por su cara (largo × alto promedio).
   // El volumen estéreo = MR × largo del trozo; el sólido = estéreo × factor de apilamiento.
   function altoPromedio(r) {
@@ -158,7 +193,7 @@
   }
 
   function resumenDe(datos) {
-    var tc = totalesConteo(datos.conteo);
+    var tc = totalesConteo(combinarConteos(datos));
     return {
       trozos: tc.n,
       m3: tc.m3,
@@ -203,11 +238,68 @@
 
   /* ================= Conteo JAS ================= */
 
+  function pintarCanchas() {
+    var canchas = estado.actual.canchas;
+    var html = '';
+    for (var i = 0; i < canchas.length; i++) {
+      var t = totalesConteo(canchas[i].conteo);
+      html += '<button type="button" data-indice="' + i + '"' +
+        (i === estado.actual.canchaActiva ? ' class="activa"' : '') + '>' +
+        escaparHTML(canchas[i].nombre) +
+        '<small>' + (t.n ? t.n + ' trozos' : 'vacía') + '</small>' +
+        '</button>';
+    }
+    html += '<button type="button" data-accion="nueva">＋ Cancha<small>agregar</small></button>';
+    $('chipsCancha').innerHTML = html;
+  }
+
+  $('chipsCancha').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('button');
+    if (!btn) return;
+    if (btn.getAttribute('data-accion') === 'nueva') {
+      var nombre = prompt('Nombre de la cancha nueva:', 'Cancha ' + (estado.actual.canchas.length + 1));
+      if (nombre === null) return;
+      nombre = nombre.trim() || ('Cancha ' + (estado.actual.canchas.length + 1));
+      estado.actual.canchas.push({ nombre: nombre, conteo: {} });
+      estado.actual.canchaActiva = estado.actual.canchas.length - 1;
+    } else {
+      var i = +btn.getAttribute('data-indice');
+      if (i === estado.actual.canchaActiva) {
+        var actual = estado.actual.canchas[i];
+        var nuevo = prompt('Nombre de la cancha:', actual.nombre);
+        if (nuevo === null) return;
+        actual.nombre = nuevo.trim() || actual.nombre;
+      } else {
+        estado.actual.canchaActiva = i;
+      }
+    }
+    guardar();
+    pintarCanchas();
+    pintarChips();
+    pintarGrid();
+  });
+
+  $('btnEliminarCancha').addEventListener('click', function () {
+    var canchas = estado.actual.canchas;
+    if (canchas.length === 1) {
+      alert('Es la única cancha: para partir de cero usa «Vaciar el conteo de esta cancha».');
+      return;
+    }
+    var actual = canchas[estado.actual.canchaActiva];
+    if (!confirm('¿Eliminar «' + actual.nombre + '» con todo su conteo? Esto no borra lo ya guardado en el historial.')) return;
+    canchas.splice(estado.actual.canchaActiva, 1);
+    estado.actual.canchaActiva = 0;
+    guardar();
+    pintarCanchas();
+    pintarChips();
+    pintarGrid();
+  });
+
   function pintarChips() {
     var html = '';
     for (var i = 0; i < LARGOS.length; i++) {
       var L = LARGOS[i];
-      var t = totalesLargo(estado.actual.conteo, i);
+      var t = totalesLargo(conteoActivo(), i);
       html += '<button type="button" data-indice="' + i + '"' +
         (i === largoActivo ? ' class="activa"' : '') + '>' +
         fmtLargo(L.nom) + ' m' +
@@ -227,7 +319,7 @@
 
   function pintarGrid() {
     var L = LARGOS[largoActivo];
-    var porDiam = estado.actual.conteo[String(L.nom)] || {};
+    var porDiam = conteoActivo()[String(L.nom)] || {};
     var html = '';
     for (var i = 0; i < DIAMETROS.length; i++) {
       var diam = DIAMETROS[i];
@@ -252,8 +344,9 @@
     var diam = fila.getAttribute('data-diam');
     var L = LARGOS[largoActivo];
     var claveLargo = String(L.nom);
-    if (!estado.actual.conteo[claveLargo]) estado.actual.conteo[claveLargo] = {};
-    var porDiam = estado.actual.conteo[claveLargo];
+    var conteo = conteoActivo();
+    if (!conteo[claveLargo]) conteo[claveLargo] = {};
+    var porDiam = conteo[claveLargo];
     if (!(cant > 0)) { cant = 0; delete porDiam[diam]; }
     else porDiam[diam] = cant;
     guardar();
@@ -262,13 +355,14 @@
     if (escribirCampo) fila.querySelector('.cuenta').value = cant;
     fila.querySelector('.m3').textContent = cant ? fmt(m3, 3) : '';
     fila.classList.toggle('con-trozos', cant > 0);
+    pintarCanchas();
     pintarChips();
     pintarResumen();
   }
 
   function cuentaDe(fila) {
     var L = LARGOS[largoActivo];
-    var porDiam = estado.actual.conteo[String(L.nom)] || {};
+    var porDiam = conteoActivo()[String(L.nom)] || {};
     return porDiam[fila.getAttribute('data-diam')] || 0;
   }
 
@@ -296,28 +390,40 @@
   });
 
   function pintarResumen() {
+    var canchas = estado.actual.canchas;
+    var varias = canchas.length > 1;
     var html = '<tr><th>Largo</th><th>Trozos</th><th>M³ JAS</th></tr>';
-    var hayAlgo = false;
-    for (var i = 0; i < LARGOS.length; i++) {
-      var t = totalesLargo(estado.actual.conteo, i);
-      if (!t.n) continue;
-      hayAlgo = true;
-      html += '<tr><td>' + fmtLargo(LARGOS[i].nom) + ' m</td>' +
-        '<td>' + t.n + '</td><td>' + fmt(t.m3, 3) + '</td></tr>';
+    var totN = 0, totM3 = 0, hayAlgo = false;
+    for (var c = 0; c < canchas.length; c++) {
+      var tc = totalesConteo(canchas[c].conteo);
+      totN += tc.n;
+      totM3 += tc.m3;
+      if (varias) {
+        html += '<tr class="cancha"><td>' + escaparHTML(canchas[c].nombre) + '</td>' +
+          '<td>' + tc.n + '</td><td>' + fmt(tc.m3, 3) + '</td></tr>';
+      }
+      for (var i = 0; i < LARGOS.length; i++) {
+        var t = totalesLargo(canchas[c].conteo, i);
+        if (!t.n) continue;
+        hayAlgo = true;
+        html += '<tr><td>' + (varias ? '· ' : '') + fmtLargo(LARGOS[i].nom) + ' m</td>' +
+          '<td>' + t.n + '</td><td>' + fmt(t.m3, 3) + '</td></tr>';
+      }
     }
-    var total = totalesConteo(estado.actual.conteo);
-    if (!hayAlgo) {
+    if (!hayAlgo && !varias) {
       html += '<tr><td colspan="3" class="vacio">Aún no hay trozos contados</td></tr>';
     }
-    html += '<tr class="total"><td>TOTAL</td><td>' + total.n + '</td>' +
-      '<td>' + fmt(total.m3, 3) + '</td></tr>';
+    html += '<tr class="total"><td>TOTAL</td><td>' + totN + '</td>' +
+      '<td>' + fmt(totM3, 3) + '</td></tr>';
     $('tablaResumen').innerHTML = html;
   }
 
   $('btnVaciarConteo').addEventListener('click', function () {
-    if (!confirm('¿Vaciar todo el conteo de trozos? Esto no borra lo ya guardado en el historial.')) return;
-    estado.actual.conteo = {};
+    var nombre = estado.actual.canchas[estado.actual.canchaActiva].nombre;
+    if (!confirm('¿Vaciar el conteo de «' + nombre + '»? Esto no borra lo ya guardado en el historial.')) return;
+    estado.actual.canchas[estado.actual.canchaActiva].conteo = {};
     guardar();
+    pintarCanchas();
     pintarChips();
     pintarGrid();
   });
@@ -415,9 +521,18 @@
 
   function pintarProduccion() {
     var r = resumenDe(estado.actual);
+    var canchas = estado.actual.canchas;
     var html =
       '<tr><td>Trozos cubicados (JAS)</td><td>' + r.trozos + '</td></tr>' +
-      '<tr><td>Volumen JAS</td><td>' + fmt(r.m3, 3) + ' m³</td></tr>' +
+      '<tr><td>Volumen JAS</td><td>' + fmt(r.m3, 3) + ' m³</td></tr>';
+    if (canchas.length > 1) {
+      for (var c = 0; c < canchas.length; c++) {
+        var tc = totalesConteo(canchas[c].conteo);
+        html += '<tr><td>&nbsp;&nbsp;· ' + escaparHTML(canchas[c].nombre) + ' (' + tc.n + ' trozos)</td>' +
+          '<td>' + fmt(tc.m3, 3) + ' m³</td></tr>';
+      }
+    }
+    html +=
       '<tr><td>Rumas</td><td>' + r.rumas + '</td></tr>' +
       '<tr><td>Metro ruma</td><td>' + fmt(r.mr, 2) + ' MR</td></tr>' +
       '<tr><td>Volumen estéreo</td><td>' + fmt(r.est || 0, 2) + ' m³ est.</td></tr>';
@@ -441,12 +556,14 @@
     copia.tot = r;
     estado.historial.unshift(copia);
 
-    var limpiar = confirm('Calibración guardada en el historial ✔\n\n¿Quieres limpiar el conteo, las rumas y las novedades para empezar una nueva?');
+    var limpiar = confirm('Calibración guardada en el historial ✔\n\n¿Quieres limpiar las canchas, las rumas y las novedades para empezar una nueva?');
     if (limpiar) {
-      estado.actual.conteo = {};
+      estado.actual.canchas = [{ nombre: 'Cancha 1', conteo: {} }];
+      estado.actual.canchaActiva = 0;
       estado.actual.rumas = [];
       estado.actual.novedades = '';
       estado.actual.fecha = hoyISO();
+      pintarCanchas();
       pintarChips();
       pintarGrid();
       pintarRumas();
@@ -471,6 +588,8 @@
 
   function hojasDe(datos) {
     var r = datos.tot || resumenDe(datos);
+    var listaCanchas = canchasDe(datos);
+    var varias = listaCanchas.length > 1;
     var i, j;
 
     // --- Hoja Reporte ---
@@ -484,11 +603,22 @@
       [],
       [{ v: 'PRODUCCIÓN DEL DÍA', s: 1 }],
       [{ v: 'Trozos cubicados (JAS)', s: 0 }, r.trozos],
-      [{ v: 'Volumen JAS (m³)', s: 0 }, { v: r.m3, s: 2 }],
+      [{ v: 'Volumen JAS (m³)', s: 0 }, { v: r.m3, s: 2 }]
+    ];
+    if (varias) {
+      for (i = 0; i < listaCanchas.length; i++) {
+        var tCancha = totalesConteo(listaCanchas[i].conteo);
+        filasReporte.push([
+          { v: '   · ' + (listaCanchas[i].nombre || ('Cancha ' + (i + 1))) + ' — ' + tCancha.n + ' trozos', s: 0 },
+          { v: tCancha.m3, s: 2 }
+        ]);
+      }
+    }
+    filasReporte.push(
       [{ v: 'Rumas registradas', s: 0 }, r.rumas],
       [{ v: 'Metro ruma (MR)', s: 0 }, { v: r.mr, s: 2 }],
       [{ v: 'Volumen estéreo (m³ est.)', s: 0 }, { v: r.est || 0, s: 2 }]
-    ];
+    );
     var factor = numeroDesdeTexto(datos.factorMR);
     if (factor > 0 && r.est > 0) {
       filasReporte.push([{ v: 'Volumen sólido (factor apilamiento ' + String(factor).replace('.', ',') + ')', s: 0 }, { v: r.est * factor, s: 2 }]);
@@ -499,47 +629,65 @@
 
     var hojas = [{ nombre: 'Reporte', anchos: [34, 18], filas: filasReporte }];
 
-    // --- Hoja Cubicación JAS (mismo orden que la tabla de terreno) ---
-    var fila1 = [{ v: 'DIÁM (cm)', s: 1 }];
-    for (i = 0; i < LARGOS.length; i++) {
-      fila1.push({ v: 'N° ' + LARGOS[i].nom.toFixed(2).replace('.', ',') + ' m', s: 1 });
-      fila1.push({ v: 'M³', s: 1 });
-    }
-    fila1.push({ v: 'TOTAL N°', s: 1 });
-    fila1.push({ v: 'TOTAL M³', s: 1 });
-
-    var filasJAS = [fila1];
-    for (i = 0; i < DIAMETROS.length; i++) {
-      var diam = DIAMETROS[i];
-      var fila = [diam];
-      var totN = 0, totM3 = 0;
-      for (j = 0; j < LARGOS.length; j++) {
-        var porDiam = datos.conteo[String(LARGOS[j].nom)] || {};
-        var cant = porDiam[String(diam)] || 0;
-        var m3 = cant * volumenJAS(diam, LARGOS[j].nom);
-        totN += cant;
-        totM3 += m3;
-        fila.push(cant || '');
-        fila.push(cant ? { v: m3, s: 2 } : '');
+    // --- Hoja Cubicación JAS: una tabla por cancha, como la planilla de terreno ---
+    function filaEncabezadoJAS() {
+      var fila = [{ v: 'DIÁM (cm)', s: 1 }];
+      for (var k = 0; k < LARGOS.length; k++) {
+        fila.push({ v: 'N° ' + LARGOS[k].nom.toFixed(2).replace('.', ',') + ' m', s: 1 });
+        fila.push({ v: 'M³', s: 1 });
       }
-      fila.push(totN || '');
-      fila.push(totN ? { v: totM3, s: 2 } : '');
-      filasJAS.push(fila);
+      fila.push({ v: 'TOTAL N°', s: 1 });
+      fila.push({ v: 'TOTAL M³', s: 1 });
+      return fila;
     }
-    var filaTot = [{ v: 'TOTAL', s: 1 }];
-    var granN = 0, granM3 = 0;
-    for (j = 0; j < LARGOS.length; j++) {
-      var t = totalesLargo(datos.conteo, j);
-      granN += t.n;
-      granM3 += t.m3;
-      filaTot.push({ v: t.n, s: 1 });
-      filaTot.push({ v: t.m3, s: 3 });
-    }
-    filaTot.push({ v: granN, s: 1 });
-    filaTot.push({ v: granM3, s: 3 });
-    filasJAS.push(filaTot);
 
-    var anchosJAS = [10];
+    function filaTotalJAS(conteo, etiqueta) {
+      var fila = [{ v: etiqueta, s: 1 }];
+      var granN = 0, granM3 = 0;
+      for (var k = 0; k < LARGOS.length; k++) {
+        var t = totalesLargo(conteo, k);
+        granN += t.n;
+        granM3 += t.m3;
+        fila.push({ v: t.n, s: 1 });
+        fila.push({ v: t.m3, s: 3 });
+      }
+      fila.push({ v: granN, s: 1 });
+      fila.push({ v: granM3, s: 3 });
+      return fila;
+    }
+
+    var filasJAS = [];
+    for (var c = 0; c < listaCanchas.length; c++) {
+      var conteo = listaCanchas[c].conteo;
+      if (varias || listaCanchas[c].nombre) {
+        filasJAS.push([{ v: 'CANCHA: ' + (listaCanchas[c].nombre || (c + 1)), s: 1 }]);
+      }
+      filasJAS.push(filaEncabezadoJAS());
+      for (i = 0; i < DIAMETROS.length; i++) {
+        var diam = DIAMETROS[i];
+        var fila = [diam];
+        var totN = 0, totM3 = 0;
+        for (j = 0; j < LARGOS.length; j++) {
+          var porDiam = conteo[String(LARGOS[j].nom)] || {};
+          var cant = porDiam[String(diam)] || 0;
+          var m3 = cant * volumenJAS(diam, LARGOS[j].nom);
+          totN += cant;
+          totM3 += m3;
+          fila.push(cant || '');
+          fila.push(cant ? { v: m3, s: 2 } : '');
+        }
+        fila.push(totN || '');
+        fila.push(totN ? { v: totM3, s: 2 } : '');
+        filasJAS.push(fila);
+      }
+      filasJAS.push(filaTotalJAS(conteo, varias ? 'TOTAL CANCHA' : 'TOTAL'));
+      filasJAS.push([]);
+    }
+    if (varias) {
+      filasJAS.push(filaTotalJAS(combinarConteos(datos), 'TOTAL GENERAL'));
+    }
+
+    var anchosJAS = [12];
     for (i = 0; i < LARGOS.length; i++) { anchosJAS.push(10); anchosJAS.push(9); }
     anchosJAS.push(10); anchosJAS.push(10);
     hojas.push({ nombre: 'Cubicación JAS', anchos: anchosJAS, filas: filasJAS });
@@ -624,6 +772,14 @@
     lineas.push('🪵 Producción:');
     lineas.push('• Trozos cubicados (JAS): ' + r.trozos);
     lineas.push('• Volumen JAS: ' + fmt(r.m3, 3) + ' m³');
+    var listaCanchas = canchasDe(datos);
+    if (listaCanchas.length > 1) {
+      for (var c = 0; c < listaCanchas.length; c++) {
+        var tc = totalesConteo(listaCanchas[c].conteo);
+        lineas.push('   · ' + (listaCanchas[c].nombre || ('Cancha ' + (c + 1))) + ': ' +
+          tc.n + ' trozos — ' + fmt(tc.m3, 3) + ' m³');
+      }
+    }
     if (r.rumas) {
       lineas.push('• Rumas: ' + r.rumas + ' — ' + fmt(r.mr, 2) + ' MR — ' + fmt(r.est || 0, 2) + ' m³ est.');
       var factor = numeroDesdeTexto(datos.factorMR);
@@ -751,6 +907,7 @@
   $('mrTrozo').value = '2.44';
   $('factorMR').value = estado.actual.factorMR || '';
 
+  pintarCanchas();
   pintarChips();
   pintarGrid();
   pintarRumas();

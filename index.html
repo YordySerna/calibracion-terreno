@@ -44,7 +44,12 @@
 
     <div class="tarjeta">
       <h2>Conteo de trozos</h2>
-      <p class="nota">Elige el largo y marca cada trozo con el botón +. El volumen sale solo de la tabla JAS.</p>
+      <p class="nota">Elige la cancha donde se trozó y el largo. Marca cada trozo con el botón +
+      o tipea la cantidad directo; el volumen sale solo de la tabla JAS.
+      Toca la cancha activa para cambiarle el nombre.</p>
+      <p class="etiqueta-chips">Cancha</p>
+      <div class="chips" id="chipsCancha"></div>
+      <p class="etiqueta-chips">Largo</p>
       <div class="chips" id="chipsLargo"></div>
       <div class="encabezado-grid">
         <span>Diám.</span><span></span><span>Trozos</span><span></span><span>M³</span>
@@ -55,7 +60,8 @@
     <div class="tarjeta">
       <h2>Resumen del conteo</h2>
       <table class="tabla" id="tablaResumen"></table>
-      <button class="btn peligro" id="btnVaciarConteo" type="button">Vaciar todo el conteo</button>
+      <button class="btn peligro" id="btnVaciarConteo" type="button">Vaciar el conteo de esta cancha</button>
+      <button class="btn peligro" id="btnEliminarCancha" type="button">Eliminar esta cancha</button>
     </div>
 
   </section>
