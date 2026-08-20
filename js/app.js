@@ -328,7 +328,7 @@
       html += '<div class="fila-diam' + (cant ? ' con-trozos' : '') + '" data-diam="' + diam + '">' +
         '<span class="diam">' + diam + '</span>' +
         '<button type="button" class="menos" aria-label="Quitar trozo de ' + diam + ' cm">−</button>' +
-        '<input class="cuenta" type="number" inputmode="numeric" min="0" step="1" value="' + cant + '" aria-label="Trozos de ' + diam + ' cm">' +
+        '<input class="cuenta" type="text" inputmode="numeric" pattern="[0-9]*" value="' + cant + '" aria-label="Trozos de ' + diam + ' cm">' +
         '<button type="button" class="mas" aria-label="Sumar trozo de ' + diam + ' cm">+</button>' +
         '<span class="m3">' + (cant ? fmt(m3, 3) : '') + '</span>' +
         '</div>';
@@ -387,6 +387,21 @@
   $('gridConteo').addEventListener('change', function (ev) {
     if (!ev.target.classList.contains('cuenta')) return;
     ev.target.value = cuentaDe(ev.target.closest('.fila-diam'));
+  });
+
+  // Al tocar el campo se selecciona el número completo: lo que se tipea lo
+  // reemplaza, sin tener que borrar a mano lo que había.
+  $('gridConteo').addEventListener('focusin', function (ev) {
+    var campo = ev.target;
+    if (!campo.classList.contains('cuenta')) return;
+    setTimeout(function () {
+      try { campo.select(); } catch (err) {}
+    }, 0);
+  });
+
+  // Enter cierra el teclado del teléfono.
+  $('gridConteo').addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter' && ev.target.classList.contains('cuenta')) ev.target.blur();
   });
 
   function pintarResumen() {
