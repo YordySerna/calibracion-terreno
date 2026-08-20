@@ -1,6 +1,6 @@
 /* Service worker: deja la app disponible sin señal.
    Al cambiar VERSION se renueva el caché completo en la próxima visita. */
-var VERSION = 'calibracion-v4';
+var VERSION = 'calibracion-v5';
 
 var ARCHIVOS = [
   './',

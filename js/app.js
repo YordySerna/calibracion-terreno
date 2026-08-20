@@ -377,26 +377,26 @@
   // Tipear la cantidad directo en el campo (para no apretar + trescientas veces).
   $('gridConteo').addEventListener('input', function (ev) {
     if (!ev.target.classList.contains('cuenta')) return;
+    // Campo vacío = todavía no escribe nada: se conserva la cantidad guardada.
+    if (ev.target.value.trim() === '') return;
     var n = parseInt(ev.target.value, 10);
     if (!(n >= 0)) n = 0;
     if (n > 99999) n = 99999;
     fijarCuenta(ev.target.closest('.fila-diam'), n, false);
   });
 
-  // Al salir del campo se normaliza lo que quedó escrito (vacío → 0).
-  $('gridConteo').addEventListener('change', function (ev) {
+  // Al tocar el campo se vacía al tiro: se tipea la cantidad sin borrar nada.
+  // La cantidad guardada no cambia hasta que se escribe algo.
+  $('gridConteo').addEventListener('focusin', function (ev) {
     if (!ev.target.classList.contains('cuenta')) return;
-    ev.target.value = cuentaDe(ev.target.closest('.fila-diam'));
+    ev.target.value = '';
   });
 
-  // Al tocar el campo se selecciona el número completo: lo que se tipea lo
-  // reemplaza, sin tener que borrar a mano lo que había.
-  $('gridConteo').addEventListener('focusin', function (ev) {
-    var campo = ev.target;
-    if (!campo.classList.contains('cuenta')) return;
-    setTimeout(function () {
-      try { campo.select(); } catch (err) {}
-    }, 0);
+  // Al salir del campo vuelve a mostrarse la cantidad guardada
+  // (si se tipeó algo ya quedó tomada; si no, se restaura la que había).
+  $('gridConteo').addEventListener('focusout', function (ev) {
+    if (!ev.target.classList.contains('cuenta')) return;
+    ev.target.value = cuentaDe(ev.target.closest('.fila-diam'));
   });
 
   // Enter cierra el teclado del teléfono.
